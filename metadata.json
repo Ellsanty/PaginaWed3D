@@ -1,0 +1,8 @@
+{
+  "name": "Santiago Penso — Proyecto de Vida 3D",
+  "description": "Presentación interactiva 3D del proyecto de vida de Santiago Penso con música de fondo motivacional en bucle continuo.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
