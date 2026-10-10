@@ -1,0 +1,671 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Santiago Penso — Proyecto de Vida 3D</title>
+    
+    <!-- Fuentes Cinzel y Space Grotesk -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;700&family=Space+Grotesk:wght@300;400;500;700&display=swap" rel="stylesheet">
+    
+    <style>
+        :root {
+            --gold: #dfb260;
+            --gold-glow: rgba(223, 178, 96, 0.45);
+            --bg: #05070a;
+            --glass: rgba(8, 12, 20, 0.88);
+            --border: rgba(223, 178, 96, 0.45);
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            user-select: none;
+        }
+
+        body, html {
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            background-color: var(--bg);
+            color: #ffffff;
+            font-family: 'Space Grotesk', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+        }
+
+        /* Canvas 3D de fondo */
+        #webgl {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            z-index: 1;
+            pointer-events: none;
+        }
+
+        /* Header Cinemático Superior */
+        header {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            padding: 22px 40px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            z-index: 100;
+            backdrop-filter: blur(14px);
+            -webkit-backdrop-filter: blur(14px);
+            background: rgba(5, 7, 10, 0.9);
+            border-bottom: 1px solid rgba(223, 178, 96, 0.2);
+        }
+
+        .brand-container {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .sparkle-icon {
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            border: 1px solid rgba(223, 178, 96, 0.5);
+            background: rgba(223, 178, 96, 0.1);
+            color: var(--gold);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 14px;
+        }
+
+        .brand {
+            font-family: 'Cinzel', serif;
+            font-size: 1.25rem;
+            letter-spacing: 3px;
+            color: #fff;
+            text-transform: uppercase;
+            font-weight: 700;
+            line-height: 1;
+        }
+
+        .brand span {
+            color: var(--gold);
+            font-size: 0.72rem;
+            display: block;
+            margin-top: 4px;
+            letter-spacing: 2px;
+            font-family: 'Space Grotesk', sans-serif;
+            opacity: 0.9;
+        }
+
+        nav ul {
+            display: flex;
+            gap: 25px;
+            list-style: none;
+        }
+
+        nav a {
+            color: rgba(255, 255, 255, 0.6);
+            text-decoration: none;
+            font-size: 0.8rem;
+            letter-spacing: 2px;
+            text-transform: uppercase;
+            transition: all 0.3s ease;
+            cursor: pointer;
+            padding-bottom: 4px;
+            border-bottom: 2px solid transparent;
+        }
+
+        nav a:hover, nav a.active-link {
+            color: var(--gold);
+            border-bottom: 2px solid var(--gold);
+            text-shadow: 0 0 10px rgba(223, 178, 96, 0.6);
+        }
+
+        /* Contenedor de Diapositivas Cinemáticas */
+        .slides-container {
+            position: fixed;
+            inset: 0;
+            z-index: 2;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 80px 20px 60px 20px;
+            pointer-events: none;
+        }
+
+        section {
+            position: absolute;
+            width: 100%;
+            max-width: 760px;
+            opacity: 0;
+            visibility: hidden;
+            transform: translateY(25px) scale(0.97);
+            transition: all 0.75s cubic-bezier(0.16, 1, 0.3, 1);
+            pointer-events: none;
+        }
+
+        section.active {
+            opacity: 1;
+            visibility: visible;
+            transform: translateY(0) scale(1);
+            pointer-events: auto;
+        }
+
+        /* Tarjeta de Lujo de Alta Visibilidad */
+        .luxury-card {
+            background: var(--glass);
+            border: 1px solid var(--border);
+            backdrop-filter: blur(28px);
+            -webkit-backdrop-filter: blur(28px);
+            border-radius: 12px;
+            padding: 45px 50px;
+            box-shadow: 0 40px 80px rgba(0, 0, 0, 0.95), inset 0 1px 0 rgba(255, 255, 255, 0.12);
+        }
+
+        .tag {
+            color: var(--gold);
+            font-size: 0.8rem;
+            letter-spacing: 3px;
+            text-transform: uppercase;
+            margin-bottom: 12px;
+            display: block;
+            font-weight: 700;
+        }
+
+        h2 {
+            font-family: 'Cinzel', serif;
+            font-size: 2.2rem;
+            font-weight: 400;
+            line-height: 1.2;
+            margin-bottom: 18px;
+            letter-spacing: 2px;
+            color: #ffffff;
+            border-bottom: 1px solid rgba(223, 178, 96, 0.3);
+            padding-bottom: 12px;
+        }
+
+        p {
+            color: #f0f4f8;
+            font-size: 1.05rem;
+            line-height: 1.75;
+            font-weight: 400;
+            margin-bottom: 15px;
+        }
+
+        .bullet-list {
+            list-style: none;
+            margin-top: 14px;
+        }
+
+        .bullet-list li {
+            position: relative;
+            padding-left: 24px;
+            margin-bottom: 12px;
+            color: #e5e7eb;
+            font-size: 1rem;
+            line-height: 1.6;
+            font-weight: 400;
+        }
+
+        .bullet-list li::before {
+            content: "✦";
+            position: absolute;
+            left: 0;
+            color: var(--gold);
+            font-size: 1.1rem;
+        }
+
+        .bullet-list strong {
+            color: #ffffff;
+        }
+
+        /* Hero Landing Inicial */
+        .hero-title {
+            text-align: center;
+        }
+
+        .hero-title h1 {
+            font-family: 'Cinzel', serif;
+            font-size: clamp(2.4rem, 5vw, 3.8rem);
+            letter-spacing: 5px;
+            text-transform: uppercase;
+            line-height: 1.15;
+            margin-bottom: 14px;
+            color: #ffffff;
+            text-shadow: 0 5px 25px rgba(0, 0, 0, 0.8);
+        }
+
+        .hero-title .hero-subtitle {
+            font-size: 1.1rem;
+            letter-spacing: 3px;
+            color: var(--gold);
+            text-transform: uppercase;
+            font-weight: 500;
+            margin-bottom: 20px;
+        }
+
+        .start-btn {
+            display: inline-block;
+            margin-top: 15px;
+            padding: 12px 28px;
+            border-radius: 30px;
+            background: var(--gold);
+            color: #000;
+            font-size: 0.75rem;
+            letter-spacing: 2px;
+            text-transform: uppercase;
+            font-weight: 700;
+            border: 1px solid var(--gold);
+            cursor: pointer;
+            box-shadow: 0 0 20px rgba(223, 178, 96, 0.4);
+            transition: all 0.3s;
+        }
+
+        .start-btn:hover {
+            background: #c99e4b;
+            transform: scale(1.03);
+        }
+
+        /* Footer Cinemático */
+        footer {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            width: 100%;
+            padding: 18px 40px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            z-index: 100;
+            background: linear-gradient(to top, rgba(5,7,10,0.95), rgba(5,7,10,0.4), transparent);
+        }
+
+        .nav-hint {
+            font-size: 0.72rem;
+            letter-spacing: 2px;
+            text-transform: uppercase;
+            color: rgba(255, 255, 255, 0.6);
+        }
+
+        .controls-group {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+        }
+
+        .dots-container {
+            display: flex;
+            gap: 6px;
+            align-items: center;
+        }
+
+        .dot {
+            width: 8px;
+            height: 6px;
+            border-radius: 4px;
+            background: rgba(255, 255, 255, 0.3);
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .dot.active {
+            width: 24px;
+            background: var(--gold);
+            box-shadow: 0 0 8px var(--gold);
+        }
+
+        .counter {
+            font-family: monospace;
+            font-size: 0.75rem;
+            letter-spacing: 2px;
+            color: var(--gold);
+        }
+
+        .nav-arrow-btn {
+            background: rgba(0, 0, 0, 0.4);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            color: #fff;
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.3s;
+        }
+
+        .nav-arrow-btn:hover {
+            border-color: var(--gold);
+            color: var(--gold);
+        }
+
+        @media (max-width: 768px) {
+            header {
+                padding: 16px 20px;
+            }
+            nav {
+                display: none;
+            }
+            .luxury-card {
+                padding: 30px 24px;
+            }
+            footer {
+                padding: 14px 20px;
+            }
+            .nav-hint {
+                display: none;
+            }
+        }
+    </style>
+</head>
+<body>
+
+    <!-- Audio de Fondo Automático en Bucle Continuo (Máximo volumen) -->
+    <audio id="bgMusic" autoplay loop preload="auto">
+        <source src="Your Next Opponent Is You.mp3" type="audio/mpeg">
+        <source src="your-next-opponent-is-you.mp3" type="audio/mpeg">
+    </audio>
+
+    <!-- Canvas 3D de fondo -->
+    <canvas id="webgl"></canvas>
+
+    <!-- Header Cinemático -->
+    <header>
+        <div class="brand-container">
+            <div class="sparkle-icon">✦</div>
+            <div class="brand">
+                Santiago Penso
+                <span>Proyecto de Vida · CUC</span>
+            </div>
+        </div>
+        <nav>
+            <ul id="menu-list">
+                <li><a data-index="0" class="active-link">Inicio</a></li>
+                <li><a data-index="1">Identidad</a></li>
+                <li><a data-index="2">Trayectoria</a></li>
+                <li><a data-index="3">Proyección</a></li>
+                <li><a data-index="4">Estilo de Vida</a></li>
+                <li><a data-index="5">Eje CUC</a></li>
+            </ul>
+        </nav>
+    </header>
+
+    <!-- Contenedor de Secciones -->
+    <div class="slides-container">
+        
+        <!-- Inicio -->
+        <section id="slide-0" class="active">
+            <div class="luxury-card hero-title">
+                <span class="tag">LIFEQUEST · Universidad de la Costa</span>
+                <h1>Santiago José Penso Peña</h1>
+                <div class="hero-subtitle">Técnico en Desarrollo de Software</div>
+                <p style="color: #cbd5e1; max-width: 580px; margin: 0 auto 20px auto; font-size: 0.95rem;">
+                    Visión integral de crecimiento personal, disciplina atlética y maestría tecnológica para transformar retos en logros tangibles.
+                </p>
+                <button class="start-btn" onclick="goToSlide(1)">Comenzar Recorrido →</button>
+            </div>
+        </section>
+
+        <!-- Identidad -->
+        <section id="slide-1">
+            <div class="luxury-card">
+                <span class="tag">01 · Autoconocimiento & Resiliencia</span>
+                <h2>Identidad & Carácter</h2>
+                <p>La construcción de mi identidad es un proceso dinámico de constante disciplina. En el fútbol (mediocampista y lateral), aprendí el valor de la perseverancia táctica y la visión de juego.</p>
+                <ul class="bullet-list">
+                    <li><strong>Superación de Adversidades:</strong> Tras el confinamiento por la pandemia, enfrenté un periodo de sobrepeso que superé con nutrición consciente y entrenamiento estricto.</li>
+                    <li><strong>Filosofía de Vida:</strong> Convertí la disciplina deportiva en la fórmula para tolerar la frustración tanto en lo personal como frente a la resolución de errores de código.</li>
+                </ul>
+            </div>
+        </section>
+
+        <!-- Trayectoria -->
+        <section id="slide-2">
+            <div class="luxury-card">
+                <span class="tag">02 · Formación Tecnológica</span>
+                <h2>Trayectoria & Carrera</h2>
+                <p>Mi proyecto profesional está estructurado de forma métrica para responder a las exigencias de la industria tecnológica global:</p>
+                <ul class="bullet-list">
+                    <li><strong>Corto Plazo (18 Años):</strong> Graduación como Técnico en Desarrollo de Software e inserción laboral inmediata como Programador Junior.</li>
+                    <li><strong>Mediano Plazo:</strong> Homologación directa hacia la carrera de Ingeniería de Sistemas en la Universidad de la Costa (CUC).</li>
+                    <li><strong>Educación Financiera:</strong> Inversión en la bolsa de valores y acciones de empresas para construir múltiples fuentes de ingresos y libertad económica.</li>
+                </ul>
+            </div>
+        </section>
+
+        <!-- Proyección -->
+        <section id="slide-3">
+            <div class="luxury-card">
+                <span class="tag">03 · Movilidad Internacional</span>
+                <h2>Proyección Global</h2>
+                <p>Estrategia de expansión profesional e internacionalización para alcanzar metas de alto rendimiento:</p>
+                <ul class="bullet-list">
+                    <li><strong>Mercado Internacional:</strong> Inserción inicial en el mercado laboral de Estados Unidos para acelerar la acumulación de capital y experiencia.</li>
+                    <li><strong>Establecimiento en Canadá:</strong> Radicación permanente enfocado en excelente calidad de vida, seguridad y un sistema de salud público robusto.</li>
+                    <li><strong>Plurilingüismo:</strong> Dominio del Inglés técnico e internacional, complementado con el estudio del Portugués como desarrollo personal y cultural.</li>
+                </ul>
+            </div>
+        </section>
+
+        <!-- Estilo de Vida -->
+        <section id="slide-4">
+            <div class="luxury-card">
+                <span class="tag">04 · Sueños & Superación</span>
+                <h2>Logro & Estilo de Vida</h2>
+                <p>Inspirado en la excelencia, el éxito tangible representa el testimonio directo del trabajo honesto, la constancia y el estudio:</p>
+                <ul class="bullet-list">
+                    <li><strong>Ingeniería Automotriz:</strong> Pasión por deportivos de alto rendimiento (Porsche, Mustang, Ferrari) y camionetas de alta gama (Cadillac, el vehículo de mis sueños).</li>
+                    <li><strong>Viajes & Familia:</strong> Conocer el mundo (visitar el Spotify Camp Nou en Barcelona, Río de Janeiro), formar un hogar con 3 hijos y asegurar una vejez tranquila y digna para mis padres.</li>
+                </ul>
+            </div>
+        </section>
+
+        <!-- Eje CUC -->
+        <section id="slide-5">
+            <div class="luxury-card">
+                <span class="tag">05 · Articulación Humanística</span>
+                <h2>Sinergia con el Software</h2>
+                <p>En el desarrollo de software, la depuración de errores (<i>debugging</i>) requiere paciencia, pensamiento crítico y mantener la cabeza fría ante el fallo.</p>
+                <p>Esta misma lógica rige la vida: los errores no son fracasos sino excepciones temporales que se resuelven mediante el análisis crítico, la resiliencia y la refactorización de decisiones para aportar soluciones de valor a la sociedad.</p>
+            </div>
+        </section>
+
+    </div>
+
+    <!-- Footer de Navegación -->
+    <footer>
+        <div class="nav-hint">Usa las flechas ← → o espera el avance automático</div>
+        <div class="controls-group">
+            <div class="dots-container" id="dots-container"></div>
+            <div class="counter" id="counter">01 / 06</div>
+            <button class="nav-arrow-btn" onclick="goToSlide(currentIndex - 1)" aria-label="Anterior">‹</button>
+            <button class="nav-arrow-btn" onclick="goToSlide(currentIndex + 1)" aria-label="Siguiente">›</button>
+        </div>
+    </footer>
+
+    <!-- Librería Three.js (Cargada desde CDN confiable para uso offline/local) -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+
+    <script>
+        // 1. Control de Diapositivas (Automático y Teclado)
+        let currentIndex = 0;
+        const totalSlides = 6;
+        let slideInterval;
+
+        const sections = document.querySelectorAll('.slides-container section');
+        const navLinks = document.querySelectorAll('nav a');
+        const counter = document.getElementById('counter');
+        const dotsContainer = document.getElementById('dots-container');
+
+        // Generar puntos de navegación
+        for (let i = 0; i < totalSlides; i++) {
+            const dot = document.createElement('div');
+            dot.className = 'dot' + (i === 0 ? ' active' : '');
+            dot.onclick = () => goToSlide(i);
+            dotsContainer.appendChild(dot);
+        }
+
+        const dots = document.querySelectorAll('.dot');
+
+        function goToSlide(index) {
+            sections[currentIndex].classList.remove('active');
+            if (navLinks[currentIndex]) navLinks[currentIndex].classList.remove('active-link');
+            if (dots[currentIndex]) dots[currentIndex].classList.remove('active');
+            
+            currentIndex = (index + totalSlides) % totalSlides;
+            
+            sections[currentIndex].classList.add('active');
+            if (navLinks[currentIndex]) navLinks[currentIndex].classList.add('active-link');
+            if (dots[currentIndex]) dots[currentIndex].classList.add('active');
+            counter.textContent = '0' + (currentIndex + 1) + ' / 0' + totalSlides;
+
+            resetTimer();
+        }
+
+        function nextSlide() {
+            goToSlide(currentIndex + 1);
+        }
+
+        function resetTimer() {
+            clearInterval(slideInterval);
+            slideInterval = setInterval(nextSlide, 7000);
+        }
+
+        window.addEventListener('keydown', (e) => {
+            if (e.key === 'ArrowRight' || e.key === 'ArrowDown') {
+                goToSlide(currentIndex + 1);
+            } else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') {
+                goToSlide(currentIndex - 1);
+            }
+        });
+
+        navLinks.forEach((link) => {
+            link.addEventListener('click', () => {
+                const idx = parseInt(link.getAttribute('data-index'), 10);
+                goToSlide(idx);
+            });
+        });
+
+        resetTimer();
+
+        // 2. Control Automático de Música de Fondo en Bucle (Volumen 100%, Sin botones)
+        const bgMusic = document.getElementById('bgMusic');
+        if (bgMusic) {
+            bgMusic.volume = 1.0;
+            bgMusic.loop = true;
+
+            const startAudio = () => {
+                bgMusic.play().catch(() => {});
+            };
+
+            // Intentar reproducir directamente
+            startAudio();
+
+            // Garantizar bucle sin fallos
+            bgMusic.addEventListener('ended', () => {
+                bgMusic.currentTime = 0;
+                bgMusic.play().catch(() => {});
+            });
+
+            // Si el navegador bloquea autoplay al hacer doble clic en el archivo, se inicia en el primer clic o tecla
+            ['click', 'touchstart', 'keydown', 'pointerdown'].forEach((evt) => {
+                window.addEventListener(evt, () => {
+                    if (bgMusic.paused) {
+                        bgMusic.play().catch(() => {});
+                    }
+                }, { passive: true });
+            });
+        }
+
+        // 3. Fondo 3D Three.js
+        const canvas = document.getElementById('webgl');
+        if (typeof THREE !== 'undefined' && canvas) {
+            const scene = new THREE.Scene();
+            scene.fog = new THREE.FogExp2(0x05070a, 0.015);
+
+            const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
+            camera.position.set(0, 120, 180);
+
+            const renderer = new THREE.WebGLRenderer({ canvas: canvas, antialias: true, alpha: true });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+
+            const ambientLight = new THREE.AmbientLight(0xdbe3ff, 0.65);
+            scene.add(ambientLight);
+
+            const sunLight = new THREE.DirectionalLight(0xdfb260, 1.8);
+            sunLight.position.set(100, 80, -100);
+            scene.add(sunLight);
+
+            const particleCount = 1800;
+            const geometry = new THREE.BufferGeometry();
+            const positions = new Float32Array(particleCount * 3);
+            const colors = new Float32Array(particleCount * 3);
+
+            for (let i = 0; i < particleCount * 3; i += 3) {
+                positions[i] = (Math.random() - 0.5) * 550;
+                positions[i + 1] = Math.random() * 220;
+                positions[i + 2] = (Math.random() - 0.5) * 550;
+
+                colors[i] = 0.87 + Math.random() * 0.1;
+                colors[i + 1] = 0.70 + Math.random() * 0.1;
+                colors[i + 2] = 0.38 + Math.random() * 0.1;
+            }
+
+            geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+            geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+
+            const particleMaterial = new THREE.PointsMaterial({
+                size: 1.6,
+                vertexColors: true,
+                transparent: true,
+                opacity: 0.75
+            });
+
+            const particles = new THREE.Points(geometry, particleMaterial);
+            scene.add(particles);
+
+            const ringGeometry = new THREE.TorusGeometry(120, 0.6, 16, 100);
+            const ringMaterial = new THREE.MeshBasicMaterial({
+                color: 0xdfb260,
+                transparent: true,
+                opacity: 0.12,
+                wireframe: true,
+            });
+            const ring = new THREE.Mesh(ringGeometry, ringMaterial);
+            ring.rotation.x = Math.PI / 2.3;
+            ring.position.y = 40;
+            scene.add(ring);
+
+            const clock = new THREE.Clock();
+
+            function animate() {
+                requestAnimationFrame(animate);
+                const elapsedTime = clock.getElapsedTime();
+                particles.rotation.y = elapsedTime * 0.028;
+                particles.rotation.x = Math.sin(elapsedTime * 0.015) * 0.05;
+                ring.rotation.z = elapsedTime * 0.035;
+
+                const targetY = 120 - (currentIndex * 16);
+                camera.position.y += (targetY - camera.position.y) * 0.05;
+
+                renderer.render(scene, camera);
+            }
+
+            animate();
+
+            window.addEventListener('resize', () => {
+                camera.aspect = window.innerWidth / window.innerHeight;
+                camera.updateProjectionMatrix();
+                renderer.setSize(window.innerWidth, window.innerHeight);
+            });
+        }
+    </script>
+</body>
+</html>
