@@ -5,7 +5,8 @@
 
 import React, { useEffect, useRef, useState } from 'react';
 import * as THREE from 'three';
-import { ChevronLeft, ChevronRight, Sparkles } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Pause, Play, Sparkles } from 'lucide-react';
+import { AUDIO_BASE64 } from './assets/audioData.ts';
 
 interface Slide {
   id: string;
@@ -117,13 +118,46 @@ const SLIDES: Slide[] = [
   },
 ];
 
+const SLIDE_DURATION = 20000; // 20 segundos
+
 export default function App() {
   const [currentSlide, setCurrentSlide] = useState(0);
+  const [isPaused, setIsPaused] = useState(false);
+  const [progress, setProgress] = useState(0);
+  const [isMusicPlaying, setIsMusicPlaying] = useState(false);
+
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
-  const timerRef = useRef<NodeJS.Timeout | null>(null);
+  const cardContainerRef = useRef<HTMLDivElement | null>(null);
+  const mousePosRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
 
-  // 1. Manejo Automático y Continuo de Música de Fondo en Bucle (Sin botón de reproducir)
+  // Control de audio manual y automático
+  const toggleMusic = (e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
+    const audio = audioRef.current;
+    if (!audio) return;
+
+    if (audio.paused) {
+      audio.volume = 1.0;
+      audio.play()
+        .then(() => setIsMusicPlaying(true))
+        .catch((err) => console.log('Audio blocked:', err));
+    } else {
+      audio.pause();
+      setIsMusicPlaying(false);
+    }
+  };
+
+  const startAudio = () => {
+    const audio = audioRef.current;
+    if (audio && audio.paused) {
+      audio.volume = 1.0;
+      audio.play()
+        .then(() => setIsMusicPlaying(true))
+        .catch(() => {});
+    }
+  };
+
   useEffect(() => {
     const audio = audioRef.current;
     if (!audio) return;
@@ -131,83 +165,126 @@ export default function App() {
     audio.loop = true;
     audio.volume = 1.0;
 
-    const playAudio = () => {
-      audio.play().catch(() => {});
-    };
+    // Intentar reproducción inmediata al cargar
+    audio.play()
+      .then(() => setIsMusicPlaying(true))
+      .catch(() => {
+        // Bloqueado hasta la primera interacción del usuario
+        setIsMusicPlaying(false);
+      });
 
-    // Reproducir de inmediato al cargar la página
-    playAudio();
-
-    // Eventos globales para asegurar reproducción continua en la primera interacción si el navegador requirió gesto
-    const handleFirstInteraction = () => {
-      if (audio.paused) {
-        audio.play().catch(() => {});
-      }
+    const handleInteraction = () => {
+      startAudio();
     };
 
     const handleEnded = () => {
-      // Garantizar repetición instantánea continua en bucle
       audio.currentTime = 0;
       audio.play().catch(() => {});
     };
 
     audio.addEventListener('ended', handleEnded);
-    window.addEventListener('click', handleFirstInteraction, { passive: true });
-    window.addEventListener('touchstart', handleFirstInteraction, { passive: true });
-    window.addEventListener('keydown', handleFirstInteraction, { passive: true });
-    window.addEventListener('pointerdown', handleFirstInteraction, { passive: true });
+    audio.addEventListener('play', () => setIsMusicPlaying(true));
+    audio.addEventListener('pause', () => setIsMusicPlaying(false));
+
+    window.addEventListener('click', handleInteraction, { passive: true });
+    window.addEventListener('touchstart', handleInteraction, { passive: true });
+    window.addEventListener('keydown', handleInteraction, { passive: true });
+    window.addEventListener('pointerdown', handleInteraction, { passive: true });
 
     return () => {
       audio.removeEventListener('ended', handleEnded);
-      window.removeEventListener('click', handleFirstInteraction);
-      window.removeEventListener('touchstart', handleFirstInteraction);
-      window.removeEventListener('keydown', handleFirstInteraction);
-      window.removeEventListener('pointerdown', handleFirstInteraction);
+      audio.removeEventListener('play', () => setIsMusicPlaying(true));
+      audio.removeEventListener('pause', () => setIsMusicPlaying(false));
+      window.removeEventListener('click', handleInteraction);
+      window.removeEventListener('touchstart', handleInteraction);
+      window.removeEventListener('keydown', handleInteraction);
+      window.removeEventListener('pointerdown', handleInteraction);
     };
   }, []);
 
-  // 2. Control del temporizador de diapositivas automáticas (7 segundos)
-  const resetSlideTimer = () => {
-    if (timerRef.current) clearInterval(timerRef.current);
-    timerRef.current = setInterval(() => {
-      setCurrentSlide((prev) => (prev + 1) % SLIDES.length);
-    }, 7000);
-  };
-
-  useEffect(() => {
-    resetSlideTimer();
-    return () => {
-      if (timerRef.current) clearInterval(timerRef.current);
-    };
-  }, []);
-
-  const goToSlide = (index: number) => {
+  // 2. Control de Diapositivas y Barra de Progreso Superior
+  const goToSlide = (index: number, isGoingBack = false) => {
+    startAudio();
     const nextIndex = (index + SLIDES.length) % SLIDES.length;
     setCurrentSlide(nextIndex);
-    resetSlideTimer();
+    setProgress(0);
+
+    if (isGoingBack) {
+      // Si la persona le da a la flecha de regresar: se queda ahí hasta que el usuario lo pase
+      setIsPaused(true);
+    } else {
+      setIsPaused(false);
+    }
   };
 
-  // Navegación por teclado
+  useEffect(() => {
+    if (isPaused) {
+      setProgress(0);
+      return;
+    }
+
+    const intervalStep = 50; // ms
+    const increment = (100 / (SLIDE_DURATION / intervalStep));
+
+    const progressTimer = setInterval(() => {
+      setProgress((prev) => {
+        const next = prev + increment;
+        if (next >= 100) {
+          setCurrentSlide((curr) => (curr + 1) % SLIDES.length);
+          return 0;
+        }
+        return next;
+      });
+    }, intervalStep);
+
+    return () => clearInterval(progressTimer);
+  }, [isPaused, currentSlide]);
+
+  // Navegación por teclado (Espacio = pausar/reanudar, Flechas = cambiar)
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'ArrowRight' || e.key === 'ArrowDown') {
-        goToSlide(currentSlide + 1);
+      if (e.code === 'Space') {
+        e.preventDefault();
+        setIsPaused((prev) => !prev);
+      } else if (e.key === 'ArrowRight' || e.key === 'ArrowDown') {
+        goToSlide(currentSlide + 1, false);
       } else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') {
-        goToSlide(currentSlide - 1);
+        goToSlide(currentSlide - 1, true); // Regresar -> Pausar avance automático
       }
     };
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [currentSlide, isPaused]);
+
+  // 3. Efecto 3D Interactivo en Tarjetas con el Mouse (Tilt Parallax)
+  useEffect(() => {
+    const handleMouseMove = (e: MouseEvent) => {
+      const mx = e.clientX / window.innerWidth - 0.5;
+      const my = e.clientY / window.innerHeight - 0.5;
+      mousePosRef.current = { x: mx, y: my };
+
+      const activeCard = cardContainerRef.current?.querySelector<HTMLElement>(
+        '.luxury-card-active'
+      );
+      if (activeCard) {
+        const rx = my * -25;
+        const ry = mx * 25;
+        activeCard.style.transform = `rotateX(${rx}deg) rotateY(${ry}deg) translateZ(20px)`;
+      }
+    };
+
+    window.addEventListener('mousemove', handleMouseMove);
+    return () => window.removeEventListener('mousemove', handleMouseMove);
   }, [currentSlide]);
 
-  // 3. Fondo Cinemático 3D con Three.js
+  // 4. Motor 3D Three.js Avanzado (Torre Central, Anillos Holográficos, Skyline, 2500 Partículas)
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
 
     const scene = new THREE.Scene();
-    scene.fog = new THREE.FogExp2(0x05070a, 0.015);
+    scene.fog = new THREE.FogExp2(0x020408, 0.008);
 
     const camera = new THREE.PerspectiveCamera(
       60,
@@ -215,7 +292,7 @@ export default function App() {
       0.1,
       1000
     );
-    camera.position.set(0, 120, 180);
+    camera.position.set(0, 40, 140);
 
     const renderer = new THREE.WebGLRenderer({
       canvas,
@@ -225,71 +302,135 @@ export default function App() {
     renderer.setSize(window.innerWidth, window.innerHeight);
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 
-    const ambientLight = new THREE.AmbientLight(0xdbe3ff, 0.65);
+    const ambientLight = new THREE.AmbientLight(0xdbe3ff, 0.7);
     scene.add(ambientLight);
 
-    const sunLight = new THREE.DirectionalLight(0xdfb260, 1.8);
-    sunLight.position.set(100, 80, -100);
+    const sunLight = new THREE.DirectionalLight(0xdfb260, 3.5);
+    sunLight.position.set(100, 150, -100);
     scene.add(sunLight);
 
-    // Sistema de partículas doradas
-    const particleCount = 1800;
+    // Torre Central Futurista
+    const centralGroup = new THREE.Group();
+    const baseMat = new THREE.MeshPhysicalMaterial({
+      color: 0x0f172a,
+      metalness: 0.9,
+      roughness: 0.2,
+      transmission: 0.3,
+    });
+    const glassMat = new THREE.MeshPhysicalMaterial({
+      color: 0x1e293b,
+      metalness: 0.8,
+      roughness: 0.1,
+      transmission: 0.7,
+      transparent: true,
+      opacity: 0.9,
+    });
+
+    const baseBlock = new THREE.Mesh(new THREE.BoxGeometry(20, 30, 20), baseMat);
+    baseBlock.position.y = 15;
+    centralGroup.add(baseBlock);
+
+    const midBlock = new THREE.Mesh(new THREE.BoxGeometry(16, 40, 16), glassMat);
+    midBlock.position.y = 50;
+    centralGroup.add(midBlock);
+
+    const topBlock = new THREE.Mesh(new THREE.BoxGeometry(12, 30, 12), baseMat);
+    topBlock.position.y = 85;
+    centralGroup.add(topBlock);
+
+    scene.add(centralGroup);
+
+    // Anillos Holográficos que flotan y ondulan
+    const rings: THREE.Mesh[] = [];
+    const ringGeo = new THREE.TorusGeometry(35, 0.8, 16, 100);
+    const ringMat = new THREE.MeshBasicMaterial({
+      color: 0xdfb260,
+      wireframe: true,
+      transparent: true,
+      opacity: 0.6,
+    });
+
+    for (let i = 0; i < 3; i++) {
+      const ring = new THREE.Mesh(ringGeo, ringMat);
+      ring.rotation.x = Math.PI / 2;
+      ring.position.y = 20 + i * 30;
+      scene.add(ring);
+      rings.push(ring);
+    }
+
+    // 24 Edificios Alrededor (Skyline Cyberpunk/Tech)
+    const buildings: THREE.Mesh[] = [];
+    const bGeo = new THREE.BoxGeometry(12, 70, 12);
+    const bMat = new THREE.MeshStandardMaterial({
+      color: 0x090d16,
+      roughness: 0.4,
+    });
+
+    for (let i = 0; i < 24; i++) {
+      const b = new THREE.Mesh(bGeo, bMat);
+      const angle = (i / 24) * Math.PI * 2;
+      const dist = 70 + Math.random() * 90;
+      b.position.x = Math.cos(angle) * dist;
+      b.position.z = Math.sin(angle) * dist;
+      b.position.y = (Math.random() - 0.5) * 20;
+      b.scale.y = 0.5 + Math.random() * 1.8;
+      scene.add(b);
+      buildings.push(b);
+    }
+
+    // 2500 Partículas Estelares Doradas
+    const particleCount = 2500;
     const geometry = new THREE.BufferGeometry();
     const positions = new Float32Array(particleCount * 3);
     const colors = new Float32Array(particleCount * 3);
 
     for (let i = 0; i < particleCount * 3; i += 3) {
-      positions[i] = (Math.random() - 0.5) * 550;
-      positions[i + 1] = Math.random() * 220;
-      positions[i + 2] = (Math.random() - 0.5) * 550;
+      positions[i] = (Math.random() - 0.5) * 600;
+      positions[i + 1] = Math.random() * 300;
+      positions[i + 2] = (Math.random() - 0.5) * 600;
 
-      // Variación dorada estética
-      colors[i] = 0.87 + Math.random() * 0.1;
-      colors[i + 1] = 0.70 + Math.random() * 0.1;
-      colors[i + 2] = 0.38 + Math.random() * 0.1;
+      colors[i] = 0.92;
+      colors[i + 1] = 0.74;
+      colors[i + 2] = 0.45;
     }
 
     geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
     geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
 
     const particleMaterial = new THREE.PointsMaterial({
-      size: 1.6,
+      size: 2.2,
       vertexColors: true,
       transparent: true,
-      opacity: 0.75,
-      blending: THREE.AdditiveBlending,
+      opacity: 0.9,
     });
 
     const particles = new THREE.Points(geometry, particleMaterial);
     scene.add(particles);
 
-    // Anillos orbitales sutiles
-    const ringGeometry = new THREE.TorusGeometry(120, 0.6, 16, 100);
-    const ringMaterial = new THREE.MeshBasicMaterial({
-      color: 0xdfb260,
-      transparent: true,
-      opacity: 0.12,
-      wireframe: true,
-    });
-    const ring = new THREE.Mesh(ringGeometry, ringMaterial);
-    ring.rotation.x = Math.PI / 2.3;
-    ring.position.y = 40;
-    scene.add(ring);
-
-    let animationFrameId: number;
     const clock = new THREE.Clock();
+    let animationFrameId: number;
 
     const animate = () => {
       animationFrameId = requestAnimationFrame(animate);
       const elapsedTime = clock.getElapsedTime();
 
-      particles.rotation.y = elapsedTime * 0.028;
-      particles.rotation.x = Math.sin(elapsedTime * 0.015) * 0.05;
-      ring.rotation.z = elapsedTime * 0.035;
+      particles.rotation.y = elapsedTime * 0.03;
+      centralGroup.rotation.y = elapsedTime * 0.08;
 
-      // Movimiento vertical de cámara según la diapositiva activa
-      const targetY = 120 - currentSlide * 16;
-      camera.position.y += (targetY - camera.position.y) * 0.05;
+      rings.forEach((r, idx) => {
+        r.rotation.z = elapsedTime * (idx % 2 === 0 ? 0.3 : -0.3);
+        r.position.y = 20 + idx * 30 + Math.sin(elapsedTime + idx) * 5;
+      });
+
+      // Movimiento dinámico de cámara guiado por la diapositiva y el mouse
+      const targetCamY = 40 + currentSlide * 25;
+      const targetCamX = mousePosRef.current.x * 40;
+      const targetCamZ = 140 + mousePosRef.current.y * 30;
+
+      camera.position.x += (targetCamX - camera.position.x) * 0.05;
+      camera.position.y += (targetCamY - camera.position.y) * 0.05;
+      camera.position.z += (targetCamZ - camera.position.z) * 0.05;
+      camera.lookAt(0, targetCamY * 0.6, 0);
 
       renderer.render(scene, camera);
     };
@@ -310,22 +451,68 @@ export default function App() {
       renderer.dispose();
       geometry.dispose();
       particleMaterial.dispose();
-      ringGeometry.dispose();
-      ringMaterial.dispose();
+      ringGeo.dispose();
+      ringMat.dispose();
+      baseMat.dispose();
+      glassMat.dispose();
+      bGeo.dispose();
+      bMat.dispose();
     };
   }, [currentSlide]);
 
   return (
-    <div className="relative w-screen h-screen overflow-hidden bg-[#05070a] text-white select-none font-space">
-      {/* Audio de Fondo Automático en Bucle Continuo */}
+    <div
+      onClick={startAudio}
+      className="relative w-screen h-screen overflow-hidden bg-[#020408] text-white select-none font-space"
+      style={{ perspective: '1200px' }}
+    >
+      {/* Barra de Progreso Superior Brillante (20 segundos) */}
+      <div
+        className="fixed top-0 left-0 progress-bar-glow z-50 pointer-events-none"
+        style={{ width: `${isPaused ? 0 : progress}%` }}
+      />
+
+      {/* Audio de Fondo Automático en Bucle Continuo con múltiples fuentes y Base64 */}
       <audio
         ref={audioRef}
-        src="/your-next-opponent-is-you.mp3?v=2"
-        autoPlay
         loop
         preload="auto"
         className="hidden"
-      />
+      >
+        <source src="/your-next-opponent-is-you.mp3" type="audio/mpeg" />
+        <source src="/Your Next Opponent Is You.mp3" type="audio/mpeg" />
+        <source src={AUDIO_BASE64} type="audio/mpeg" />
+      </audio>
+
+      {/* Botón Flotante de Control de Música */}
+      <button
+        type="button"
+        onClick={toggleMusic}
+        className="fixed bottom-6 right-8 z-50 px-5 py-2.5 rounded-full text-xs uppercase tracking-[2px] cursor-pointer transition-all duration-300 backdrop-blur-xl border border-[#dfb260]/60 shadow-[0_5px_25px_rgba(0,0,0,0.8)] pointer-events-auto flex items-center gap-2.5 bg-[#04080f]/90 hover:bg-[#dfb260] hover:text-black hover:shadow-[0_0_25px_rgba(223,178,96,0.8)] text-[#dfb260]"
+        style={{
+          boxShadow: isMusicPlaying
+            ? '0 0 20px rgba(223, 178, 96, 0.5), inset 0 0 10px rgba(223, 178, 96, 0.2)'
+            : '0 0 25px rgba(223, 178, 96, 0.75)',
+        }}
+        title="Control de música de fondo"
+      >
+        {isMusicPlaying ? (
+          <>
+            <span className="font-bold">♫</span>
+            <span>Pausar Música</span>
+            <span className="inline-flex items-center gap-0.5 ml-1">
+              <span className="w-1 h-2 bg-[#dfb260] animate-bounce" style={{ animationDelay: '0ms' }} />
+              <span className="w-1 h-3.5 bg-[#dfb260] animate-bounce" style={{ animationDelay: '150ms' }} />
+              <span className="w-1 h-2 bg-[#dfb260] animate-bounce" style={{ animationDelay: '300ms' }} />
+            </span>
+          </>
+        ) : (
+          <>
+            <span className="font-bold animate-pulse">♫</span>
+            <span className="font-semibold animate-pulse">Reproducir Música</span>
+          </>
+        )}
+      </button>
 
       {/* Canvas 3D de fondo */}
       <canvas
@@ -333,8 +520,8 @@ export default function App() {
         className="fixed inset-0 w-full h-full pointer-events-none z-0"
       />
 
-      {/* Header Cinemático Superior */}
-      <header className="fixed top-0 left-0 w-full px-6 md:px-12 py-5 flex justify-between items-center z-50 backdrop-blur-md bg-[#05070a]/90 border-b border-[#dfb260]/20">
+      {/* Header Cinemático Superior con Efecto Glass y Borde Dorado */}
+      <header className="fixed top-0 left-0 w-full px-6 md:px-12 py-5 flex justify-between items-center z-50 backdrop-blur-xl bg-[#020408]/85 border-b border-[#dfb260]/20 shadow-[0_10px_30px_rgba(0,0,0,0.9)]">
         <div className="flex items-center gap-3">
           <div className="w-8 h-8 rounded-full border border-[#dfb260]/60 flex items-center justify-center bg-[#dfb260]/10 text-[#dfb260]">
             <Sparkles className="w-4 h-4" />
@@ -356,11 +543,9 @@ export default function App() {
               <li key={slide.id}>
                 <button
                   type="button"
-                  onClick={() => goToSlide(idx)}
-                  className={`text-xs uppercase tracking-[2px] transition-all duration-300 cursor-pointer pb-1 border-b-2 ${
-                    currentSlide === idx
-                      ? 'text-[#dfb260] border-[#dfb260] font-semibold drop-shadow-[0_0_8px_rgba(223,178,96,0.6)]'
-                      : 'text-white/60 border-transparent hover:text-white hover:border-white/30'
+                  onClick={() => goToSlide(idx, false)}
+                  className={`nav-link-glow text-xs uppercase tracking-[2px] cursor-pointer pb-1 ${
+                    currentSlide === idx ? 'active font-semibold' : 'text-white/70'
                   }`}
                 >
                   {slide.id === 'inicio' ? 'Inicio' : slide.title.split('&')[0].trim()}
@@ -371,8 +556,11 @@ export default function App() {
         </nav>
       </header>
 
-      {/* Contenedor Central de Diapositivas */}
-      <main className="fixed inset-0 z-10 flex items-center justify-center px-4 sm:px-8 md:px-14 lg:px-20 pt-20 pb-16 pointer-events-none">
+      {/* Contenedor Central de Diapositivas con Perspectiva y Tilt 3D */}
+      <main
+        ref={cardContainerRef}
+        className="fixed inset-0 z-10 flex items-center justify-center px-4 sm:px-8 md:px-14 lg:px-20 pt-20 pb-16 pointer-events-none"
+      >
         <div className="w-full max-w-3xl pointer-events-auto">
           {SLIDES.map((slide, index) => {
             const isActive = currentSlide === index;
@@ -382,57 +570,57 @@ export default function App() {
                 key={slide.id}
                 className={`transition-all duration-700 ease-out transform ${
                   isActive
-                    ? 'opacity-100 translate-y-0 scale-100 pointer-events-auto'
-                    : 'opacity-0 translate-y-8 scale-95 pointer-events-none absolute inset-x-4 sm:inset-x-8 md:inset-x-14 lg:inset-x-20 top-1/2 -translate-y-1/2'
+                    ? 'opacity-100 scale-100 pointer-events-auto'
+                    : 'opacity-0 scale-90 pointer-events-none absolute inset-x-4 sm:inset-x-8 md:inset-x-14 lg:inset-x-20 top-1/2 -translate-y-1/2'
                 }`}
               >
                 {index === 0 ? (
-                  // Hero Slide Inicial
-                  <div className="luxury-card p-8 sm:p-12 md:p-14 text-center">
-                    <span className="inline-block text-[#dfb260] text-xs sm:text-sm font-semibold tracking-[3px] uppercase mb-4">
+                  // Hero Slide Inicial con Profundidad 3D en Capas
+                  <div className={`luxury-card-3d p-8 sm:p-12 md:p-14 text-center ${isActive ? 'luxury-card-active' : ''}`}>
+                    <span className="inline-block text-[#dfb260] text-xs sm:text-sm font-semibold tracking-[3px] uppercase mb-4 layer-z-30">
                       {slide.tag}
                     </span>
-                    <h2 className="font-cinzel text-3xl sm:text-5xl md:text-6xl font-normal tracking-[4px] uppercase text-white mb-4 text-shadow">
+                    <h2 className="font-cinzel text-3xl sm:text-5xl md:text-6xl font-normal tracking-[5px] uppercase text-white mb-4 drop-shadow-[0_5px_30px_rgba(223,178,96,0.4)] layer-z-50">
                       {slide.title}
                     </h2>
-                    <p className="text-[#dfb260] text-sm sm:text-lg tracking-[3px] uppercase font-medium mb-6">
+                    <p className="text-[#dfb260] text-sm sm:text-lg tracking-[4px] uppercase font-medium mb-6 layer-z-30">
                       {slide.subtitle}
                     </p>
-                    <p className="text-gray-300 text-sm sm:text-base leading-relaxed max-w-xl mx-auto font-light">
+                    <p className="text-[#cbd5e1] text-sm sm:text-base leading-relaxed max-w-xl mx-auto font-light mb-8 layer-z-10">
                       {slide.paragraphs[0]}
                     </p>
 
-                    <div className="mt-8 flex items-center justify-center gap-3">
+                    <div className="layer-z-30 flex items-center justify-center gap-3">
                       <button
                         type="button"
-                        onClick={() => goToSlide(1)}
-                        className="px-6 py-2.5 rounded-full border border-[#dfb260] text-black bg-[#dfb260] hover:bg-[#c99e4b] transition-all text-xs uppercase tracking-[2px] font-semibold shadow-[0_0_20px_rgba(223,178,96,0.4)] cursor-pointer"
+                        onClick={() => goToSlide(1, false)}
+                        className="px-8 py-3 rounded-full border border-[#dfb260] text-black bg-[#dfb260] hover:bg-[#c99e4b] transition-all text-xs uppercase tracking-[2px] font-bold shadow-[0_0_25px_rgba(223,178,96,0.5)] cursor-pointer hover:scale-105"
                       >
                         Comenzar Recorrido →
                       </button>
                     </div>
                   </div>
                 ) : (
-                  // Diapositivas de Contenido Estructurado
-                  <div className="luxury-card p-6 sm:p-10 md:p-12">
-                    <span className="inline-block text-[#dfb260] text-xs sm:text-sm font-bold tracking-[3px] uppercase mb-2">
+                  // Diapositivas de Contenido Estructurado con Relieve 3D
+                  <div className={`luxury-card-3d p-6 sm:p-10 md:p-12 ${isActive ? 'luxury-card-active' : ''}`}>
+                    <span className="inline-block text-[#dfb260] text-xs sm:text-sm font-bold tracking-[3px] uppercase mb-2 layer-z-30">
                       {slide.tag}
                     </span>
-                    <h2 className="font-cinzel text-2xl sm:text-3xl md:text-4xl font-normal text-white tracking-[2px] mb-4 pb-3 border-b border-[#dfb260]/30">
+                    <h2 className="font-cinzel text-2xl sm:text-3xl md:text-4xl font-normal text-white tracking-[2px] mb-4 pb-3 border-b border-[#dfb260]/40 layer-z-40">
                       {slide.title}
                     </h2>
 
                     {slide.paragraphs.map((p, pIdx) => (
                       <p
                         key={pIdx}
-                        className="text-gray-100 text-sm sm:text-base leading-relaxed mb-4 font-normal"
+                        className="text-[#f2f5f9] text-sm sm:text-base leading-relaxed mb-4 font-normal layer-z-10"
                       >
                         {p}
                       </p>
                     ))}
 
                     {slide.bullets && (
-                      <ul className="space-y-3 mt-4 list-none p-0">
+                      <ul className="space-y-3 mt-4 list-none p-0 layer-z-20">
                         {slide.bullets.map((b, bIdx) => (
                           <li
                             key={bIdx}
@@ -443,7 +631,7 @@ export default function App() {
                               <strong className="text-white font-semibold mr-1">
                                 {b.title}:
                               </strong>
-                              <span className="text-gray-300 font-light leading-relaxed">
+                              <span className="text-[#cbd5e1] font-light leading-relaxed">
                                 {b.desc}
                               </span>
                             </div>
@@ -459,20 +647,26 @@ export default function App() {
         </div>
       </main>
 
-      {/* Barra de Progreso y Navegación Inferior */}
-      <footer className="fixed bottom-0 left-0 w-full px-6 md:px-12 py-4 flex flex-col sm:flex-row items-center justify-between z-40 bg-gradient-to-t from-[#05070a]/95 via-[#05070a]/70 to-transparent">
-        <div className="text-[0.72rem] tracking-[2px] uppercase text-white/60 mb-2 sm:mb-0">
-          Usa las flechas ← → o espera el avance automático
+      {/* Footer de Navegación Cinemático */}
+      <footer className="fixed bottom-0 left-0 w-full px-6 md:px-12 py-4 flex flex-col sm:flex-row items-center justify-between z-40 bg-gradient-to-t from-[#020408]/95 via-[#020408]/60 to-transparent">
+        <div
+          className={`text-[0.72rem] tracking-[2px] uppercase transition-colors duration-300 mb-2 sm:mb-0 ${
+            isPaused ? 'text-[#dfb260] font-semibold' : 'text-white/60'
+          }`}
+        >
+          {isPaused
+            ? '⏸ En Pausa · Presiona Espacio para continuar'
+            : 'Espacio = Pausar/Reanudar | Flechas ← → = Cambiar | Mueve el Mouse = Efecto 3D'}
         </div>
 
-        {/* Controles de diapositivas y selector directo */}
+        {/* Controles de Diapositivas */}
         <div className="flex items-center gap-4">
           <div className="flex items-center gap-1.5">
             {SLIDES.map((_, i) => (
               <button
                 key={i}
                 type="button"
-                onClick={() => goToSlide(i)}
+                onClick={() => goToSlide(i, false)}
                 aria-label={`Ir a la diapositiva ${i + 1}`}
                 className={`h-1.5 rounded-full transition-all duration-300 cursor-pointer ${
                   currentSlide === i
@@ -487,10 +681,18 @@ export default function App() {
             0{currentSlide + 1} / 0{SLIDES.length}
           </div>
 
-          <div className="flex items-center gap-1 ml-2">
+          <div className="flex items-center gap-1.5 ml-2">
             <button
               type="button"
-              onClick={() => goToSlide(currentSlide - 1)}
+              onClick={() => setIsPaused((prev) => !prev)}
+              className="p-1.5 rounded-full border border-white/20 bg-black/40 hover:border-[#dfb260] hover:text-[#dfb260] transition-colors cursor-pointer"
+              title={isPaused ? 'Reanudar avance automático' : 'Pausar avance automático'}
+            >
+              {isPaused ? <Play className="w-3.5 h-3.5" /> : <Pause className="w-3.5 h-3.5" />}
+            </button>
+            <button
+              type="button"
+              onClick={() => goToSlide(currentSlide - 1, true)}
               className="p-1.5 rounded-full border border-white/20 bg-black/40 hover:border-[#dfb260] hover:text-[#dfb260] transition-colors cursor-pointer"
               aria-label="Diapositiva anterior"
             >
@@ -498,7 +700,7 @@ export default function App() {
             </button>
             <button
               type="button"
-              onClick={() => goToSlide(currentSlide + 1)}
+              onClick={() => goToSlide(currentSlide + 1, false)}
               className="p-1.5 rounded-full border border-white/20 bg-black/40 hover:border-[#dfb260] hover:text-[#dfb260] transition-colors cursor-pointer"
               aria-label="Siguiente diapositiva"
             >

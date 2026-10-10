@@ -2,13 +2,13 @@
 
 :root {
   --gold: #dfb260;
-  --gold-glow: rgba(223, 178, 96, 0.4);
-  --bg: #05070a;
-  --glass: rgba(8, 12, 20, 0.88);
-  --border: rgba(223, 178, 96, 0.45);
+  --gold-glow: rgba(223, 178, 96, 0.45);
+  --bg: #020408;
+  --glass: rgba(4, 8, 15, 0.92);
+  --border: rgba(223, 178, 96, 0.5);
 }
 
-body {
+body, html {
   background-color: var(--bg);
   color: #ffffff;
   font-family: 'Space Grotesk', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
@@ -16,6 +16,7 @@ body {
   overflow: hidden;
   margin: 0;
   padding: 0;
+  perspective: 1200px;
 }
 
 .font-cinzel {
@@ -26,12 +27,64 @@ body {
   font-family: 'Space Grotesk', sans-serif;
 }
 
-/* Glassmorphism Luxury Card */
-.luxury-card {
+/* Tarjeta con efecto 3D interactivo y profundidad */
+.luxury-card-3d {
   background: var(--glass);
   border: 1px solid var(--border);
-  backdrop-filter: blur(28px);
-  -webkit-backdrop-filter: blur(28px);
-  border-radius: 12px;
-  box-shadow: 0 40px 80px rgba(0, 0, 0, 0.95), inset 0 1px 0 rgba(255, 255, 255, 0.12);
+  backdrop-filter: blur(40px);
+  -webkit-backdrop-filter: blur(40px);
+  border-radius: 14px;
+  box-shadow: 0 50px 100px rgba(0, 0, 0, 0.95), 0 0 50px rgba(223, 178, 96, 0.15);
+  transform-style: preserve-3d;
+  transition: transform 0.1s ease-out;
+}
+
+/* Capas de profundidad 3D en el texto */
+.layer-z-10 {
+  transform: translateZ(20px);
+}
+.layer-z-20 {
+  transform: translateZ(25px);
+}
+.layer-z-30 {
+  transform: translateZ(30px);
+}
+.layer-z-40 {
+  transform: translateZ(40px);
+}
+.layer-z-50 {
+  transform: translateZ(50px);
+}
+
+/* Barra de progreso superior */
+.progress-bar-glow {
+  height: 3px;
+  background: var(--gold);
+  box-shadow: 0 0 12px var(--gold);
+  transition: width 0.08s linear;
+}
+
+/* Enlaces de navegación con línea expansiva */
+.nav-link-glow {
+  position: relative;
+  transition: all 0.3s ease;
+}
+.nav-link-glow::after {
+  content: '';
+  position: absolute;
+  bottom: -4px;
+  left: 0;
+  width: 0;
+  height: 2px;
+  background: var(--gold);
+  transition: width 0.3s ease;
+}
+.nav-link-glow:hover::after,
+.nav-link-glow.active::after {
+  width: 100%;
+}
+.nav-link-glow:hover,
+.nav-link-glow.active {
+  color: var(--gold);
+  text-shadow: 0 0 15px rgba(223, 178, 96, 0.8);
 }
